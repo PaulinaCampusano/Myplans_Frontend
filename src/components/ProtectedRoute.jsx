@@ -1,14 +1,26 @@
-import { Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const ProtectedRoute = ({ children, rolesPermitidos }) => {
-    const token = localStorage.getItem('token');
-    const rol = localStorage.getItem('rol');
+    const { usuario, logout } = useAuth();
+    const navigate = useNavigate();
 
-    if (!token) {
+    useEffect(() => {
+        // Escuchar sesión expirada desde el interceptor de axios
+        const handleSessionExpirada = () => {
+            logout();
+            navigate('/login');
+        };
+        window.addEventListener('sessionExpirada', handleSessionExpirada);
+        return () => window.removeEventListener('sessionExpirada', handleSessionExpirada);
+    }, []);
+
+    if (!usuario.token) {
         return <Navigate to="/login" />;
     }
 
-    if (rolesPermitidos && !rolesPermitidos.includes(rol)) {
+    if (rolesPermitidos && !rolesPermitidos.includes(usuario.rol)) {
         return <Navigate to="/dashboard" />;
     }
 

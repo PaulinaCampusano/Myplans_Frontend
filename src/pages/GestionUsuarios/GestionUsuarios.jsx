@@ -1,168 +1,327 @@
-import { useState, useEffect } from 'react';
-import { getUsuarios, crearUsuario, toggleEstado, asignarRol } from '../../services/usuarios';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import {
+    getUsuarios, crearUsuario, toggleEstado, asignarRol, updateUser,
+} from '../../services/usuarios';
+import {
+    validarFormUsuario, formatearRut, formatearTelefono,
+} from '../../utils/validaciones';
 
+/* ─── helpers ─── */
+const getRolInfo = (user) => {
+    const rol = user.role?.nombre || '';
+    if (rol === 'ROLE_ADMIN') return { label: 'Administrador', class: 'bg-white/8 text-white/80' };
+    if (rol === 'ROLE_AUDITOR') return { label: 'Supervisor', class: 'bg-validated/15 text-validated' };
+    return { label: 'Operador', class: 'bg-pending/15 text-pending' };
+};
+
+const ROLES = [
+    { key: 'ROLE_USER', label: 'Operador', desc: 'Actualiza TAGs. Sin validar planos.', badgeClass: 'bg-pending/15 text-pending' },
+    { key: 'ROLE_AUDITOR', label: 'Supervisor', desc: 'Valida y cierra planos.', badgeClass: 'bg-validated/15 text-validated' },
+    { key: 'ROLE_ADMIN', label: 'Administrador', desc: 'Acceso completo al sistema.', badgeClass: 'bg-white/8 text-white/80' },
+];
+
+const INPUT = 'w-full bg-bg border border-white/8 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-green/45 transition-colors select-text cursor-text';
+const INPUTE = 'w-full bg-bg border border-observed/50 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-observed/80 transition-colors select-text cursor-text';
+const LABEL = 'block text-[11px] font-medium text-muted uppercase tracking-wide mb-1.5';
+
+const ErrMsg = ({ campo, errores }) => errores[campo]
+    ? <span className="text-[10px] text-observed mt-0.5 block">{errores[campo]}</span>
+    : null;
+
+/* ─── ActionMenu ─── */
+const ActionMenu = ({ usuario, onEditDatos, onEditRol, onToggle }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    useEffect(() => {
+        const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', h);
+        return () => document.removeEventListener('mousedown', h);
+    }, []);
+    return (
+        <div ref={ref} className="relative inline-block">
+            <button onClick={() => setOpen(v => !v)} className="bg-transparent text-muted border border-white/8 rounded-md px-2.5 py-1 text-[11px] hover:bg-white/5 hover:text-white cursor-pointer transition-colors">
+                Editar ▾
+            </button>
+            {open && (
+                <div className="absolute right-0 top-full mt-1 bg-navy-mid border border-white/8 rounded-lg min-w-[150px] z-50 overflow-hidden shadow-xl">
+                    <button className="w-full text-left px-3.5 py-2.5 text-[12px] text-white/80 hover:bg-white/6 hover:text-white transition-colors cursor-pointer" onClick={() => { setOpen(false); onEditDatos(usuario); }}>✎ Editar datos</button>
+                    <button className="w-full text-left px-3.5 py-2.5 text-[12px] text-white/80 hover:bg-white/6 hover:text-white transition-colors cursor-pointer" onClick={() => { setOpen(false); onEditRol(usuario); }}>🔑 Cambiar rol</button>
+                    <div className="border-t border-white/8" />
+                    <button className={`w-full text-left px-3.5 py-2.5 text-[12px] transition-colors cursor-pointer ${usuario.isActive ? 'text-observed hover:bg-observed/10' : 'text-green hover:bg-green/10'}`} onClick={() => { setOpen(false); onToggle(usuario); }}>
+                        {usuario.isActive ? '⊗ Desactivar' : '✓ Activar'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/* ─── Primitivas modales ─── */
+const Overlay = ({ children, onClose }) => (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="bg-navy border border-white/8 rounded-2xl p-7 w-[540px] max-h-[85vh] overflow-y-auto">{children}</div>
+    </div>
+);
+const ModalHeader = ({ title, onClose }) => (
+    <div className="flex justify-between items-center mb-5">
+        <span className="text-[15px] font-medium text-white">{title}</span>
+        <button onClick={onClose} className="text-muted text-xl leading-none cursor-pointer hover:text-white">×</button>
+    </div>
+);
+const SectionTitle = ({ children }) => (
+    <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3 pb-2 border-b border-white/6">{children}</div>
+);
+const ModalFooter = ({ onCancel, label, loading }) => (
+    <div className="flex justify-end gap-2.5 pt-3.5 border-t border-white/8">
+        <button type="button" onClick={onCancel} className="bg-transparent text-muted border border-white/8 rounded-lg px-3.5 py-2 text-xs hover:bg-white/5 cursor-pointer transition-colors">Cancelar</button>
+        <button type="submit" disabled={loading} className="bg-green text-navy font-semibold text-xs px-4 py-2 rounded-lg hover:bg-green-dim cursor-pointer transition-colors disabled:opacity-60">
+            {loading ? 'Guardando...' : label}
+        </button>
+    </div>
+);
+const RoleCard = ({ rol, selected, onClick }) => (
+    <div onClick={onClick} className={`border rounded-lg p-3 cursor-pointer transition-all select-none ${selected ? 'border-green bg-green/10' : 'border-white/8 hover:border-white/20'}`}>
+        <span className={`text-[9px] font-semibold font-mono px-2 py-0.5 rounded-full mb-2 inline-block ${rol.badgeClass}`}>{rol.label}</span>
+        <div className="text-[13px] font-medium text-white mb-1">{rol.label}{selected && ' ✓'}</div>
+        <div className="text-[11px] text-muted leading-snug">{rol.desc}</div>
+    </div>
+);
+
+/* ════════════════════════════════════════════════════════════ */
 const GestionUsuarios = () => {
+    const navigate = useNavigate();
+    const { actualizarRol } = useAuth();
     const [usuarios, setUsuarios] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [busqueda, setBusqueda] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [modalMode, setModalMode] = useState('crear');
-    const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-    const [form, setForm] = useState({
-        email: '', password: '', nombreCompleto: '', rut: '', telefono: '', roles: ['ROLE_USER']
+
+    const [modalCrear, setModalCrear] = useState(false);
+    const [modalEditDatos, setModalEditDatos] = useState(false);
+    const [modalEditRol, setModalEditRol] = useState(false);
+    const [modalConfirmToggle, setModalConfirmToggle] = useState(false);
+    const [usuarioTarget, setUsuarioTarget] = useState(null);
+
+    const [formCrear, setFormCrear] = useState({
+        nombres: '', apellidos: '', rut: '', telefono: '+569',
+        email: '', password: '', confirmPassword: '', roles: ['ROLE_USER'],
     });
+    const [formDatos, setFormDatos] = useState({
+        nombres: '', apellidos: '', rut: '', telefono: '', email: '', password: '',
+    });
+    const [erroresCrear, setErroresCrear] = useState({});
+    const [erroresEditar, setErroresEditar] = useState({});
+    const [rolSeleccionado, setRolSeleccionado] = useState('ROLE_USER');
+
+    const flash = (type, msg) => {
+        if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 3500); }
+        else { setError(msg); setTimeout(() => setError(''), 3500); }
+    };
+
+    const cargarUsuarios = async () => {
+        try { setLoading(true); setUsuarios(await getUsuarios()); }
+        catch { flash('err', 'Error al cargar usuarios'); }
+        finally { setLoading(false); }
+    };
 
     useEffect(() => { cargarUsuarios(); }, []);
 
-    const cargarUsuarios = async () => {
-        try {
-            setLoading(true);
-            const data = await getUsuarios();
-            setUsuarios(data);
-        } catch {
-            setError('Error al cargar usuarios');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleToggle = async (id) => {
-        try {
-            await toggleEstado(id);
-            setSuccess('Estado actualizado correctamente');
-            cargarUsuarios();
-            setTimeout(() => setSuccess(''), 3000);
-        } catch {
-            setError('Error al actualizar estado');
-            setTimeout(() => setError(''), 3000);
-        }
-    };
-
-    const handleCrear = () => {
-        setModalMode('crear');
-        setForm({ email: '', password: '', nombreCompleto: '', rut: '', telefono: '', roles: ['ROLE_USER'] });
-        setShowModal(true);
-    };
-
-    const handleEditar = (usuario) => {
-        setModalMode('editar');
-        setUsuarioSeleccionado(usuario);
-        setForm({
-            email: usuario.email,
+    const abrirEditDatos = (u) => {
+        const partes = (u.nombreCompleto || '').split(' ');
+        setFormDatos({
+            nombres: partes[0] || '',
+            apellidos: partes.slice(1).join(' ') || '',
+            rut: u.rut || '',
+            telefono: u.telefono || '+569',
+            email: u.email || '',
             password: '',
-            nombreCompleto: usuario.nombreCompleto || '',
-            rut: usuario.rut || '',
-            telefono: usuario.telefono || '',
-            roles: usuario.role ? [usuario.role.nombre] : ['ROLE_USER'],
         });
-        setShowModal(true);
+        setErroresEditar({});
+        setUsuarioTarget(u);
+        setModalEditDatos(true);
     };
 
-    const handleSubmit = async (e) => {
+    const abrirEditRol = (u) => {
+        setRolSeleccionado(u.role?.nombre || 'ROLE_USER');
+        setUsuarioTarget(u);
+        setModalEditRol(true);
+    };
+
+    const abrirConfirmToggle = (u) => { setUsuarioTarget(u); setModalConfirmToggle(true); };
+
+    const handleCrear = async (e) => {
         e.preventDefault();
+        const errs = validarFormUsuario(formCrear, 'crear');
+        if (Object.keys(errs).length > 0) { setErroresCrear(errs); return; }
+        setErroresCrear({});
+        setSubmitting(true);
         try {
-            if (modalMode === 'crear') {
-                await crearUsuario(form);
-                setSuccess('Usuario creado correctamente');
-            } else {
-                await asignarRol(usuarioSeleccionado.id, form.roles[0]);
-                setSuccess('Usuario actualizado correctamente');
-            }
-            setShowModal(false);
+            await crearUsuario({
+                email: formCrear.email,
+                password: formCrear.password,
+                nombreCompleto: `${formCrear.nombres.trim()} ${formCrear.apellidos.trim()}`,
+                rut: formCrear.rut || undefined,
+                telefono: formCrear.telefono !== '+569' ? formCrear.telefono : undefined,
+                roles: formCrear.roles,
+            });
+            setModalCrear(false);
+            flash('ok', 'Usuario creado correctamente');
             cargarUsuarios();
-            setTimeout(() => setSuccess(''), 3000);
         } catch {
-            setError('Error al guardar usuario');
-            setTimeout(() => setError(''), 3000);
-        }
+            flash('err', 'Error al crear usuario. El correo puede estar en uso.');
+        } finally { setSubmitting(false); }
     };
 
-    const usuariosFiltrados = usuarios.filter(u =>
+    const handleGuardarDatos = async (e) => {
+        e.preventDefault();
+        const errs = validarFormUsuario(formDatos, 'editar');
+        if (Object.keys(errs).length > 0) { setErroresEditar(errs); return; }
+        setErroresEditar({});
+        setSubmitting(true);
+        try {
+            const nombreCompleto = [formDatos.nombres, formDatos.apellidos].filter(Boolean).join(' ');
+            const emailLogueado = localStorage.getItem('email');
+            const cambioEmail = formDatos.email !== usuarioTarget.email;
+
+            await updateUser(usuarioTarget.id, {
+                email: formDatos.email,
+                nombreCompleto: nombreCompleto || undefined,
+                rut: formDatos.rut || undefined,
+                telefono: formDatos.telefono !== '+569' ? formDatos.telefono : undefined,
+                password: formDatos.password || undefined,
+            });
+
+            setModalEditDatos(false);
+            flash('ok', 'Datos actualizados correctamente');
+
+            if (usuarioTarget.email === emailLogueado) {
+                localStorage.setItem('nombreCompleto', nombreCompleto);
+                window.dispatchEvent(new Event('nombreActualizado'));
+            }
+
+            cargarUsuarios();
+
+        } catch (err) {
+            const status = err?.response?.status;
+            const emailLogueado = localStorage.getItem('email');
+
+            if (status === 403 && formDatos.email !== usuarioTarget.email && usuarioTarget.email === emailLogueado) {
+                localStorage.clear();
+                alert('Tu correo fue actualizado correctamente. Debes iniciar sesión nuevamente con tu nuevo correo.');
+                navigate('/login');
+                return;
+            }
+
+            flash('err', err?.response?.data?.message || 'Error al actualizar datos');
+        } finally { setSubmitting(false); }
+    };
+
+    const handleGuardarRol = async () => {
+        setSubmitting(true);
+        try {
+            await asignarRol(usuarioTarget.id, rolSeleccionado);
+            setModalEditRol(false);
+            flash('ok', 'Rol actualizado correctamente');
+
+            // Si el admin se cambió su propio rol, actualizar contexto y redirigir
+            const emailLogueado = localStorage.getItem('email');
+            if (usuarioTarget.email === emailLogueado && rolSeleccionado !== 'ROLE_ADMIN') {
+                actualizarRol(rolSeleccionado);
+                setTimeout(() => navigate('/dashboard'), 1500);
+            }
+
+            cargarUsuarios();
+        } catch (err) { flash('err', err?.response?.data?.message || 'Error al cambiar rol'); }
+        finally { setSubmitting(false); }
+    };
+
+    const usuariosFiltrados = usuarios.filter((u) =>
         u.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
         u.nombreCompleto?.toLowerCase().includes(busqueda.toLowerCase())
     );
 
-    const getRolLabel = (user) => {
-        const rol = user.role?.nombre || '';
-        if (rol === 'ROLE_ADMIN') return { label: 'Administrador', color: '#d0d8e4', bg: 'rgba(255,255,255,0.08)' };
-        if (rol === 'ROLE_AUDITOR') return { label: 'Supervisor', color: '#3498db', bg: 'rgba(52,152,219,0.15)' };
-        return { label: 'Operador', color: '#f39c12', bg: 'rgba(243,156,18,0.15)' };
-    };
+    const campo = (form, setForm, errores, key, label, opts = {}) => (
+        <div className={opts.full ? 'col-span-2' : ''}>
+            <label className={LABEL}>{label}{opts.required && <span className="text-observed ml-0.5">*</span>}</label>
+            <input
+                className={errores[key] ? INPUTE : INPUT}
+                type={opts.type || 'text'}
+                value={form[key]}
+                onChange={(e) => {
+                    let v = e.target.value;
+                    if (opts.formatear === 'rut') v = formatearRut(v);
+                    if (opts.formatear === 'telefono') v = formatearTelefono(v);
+                    if (opts.soloLetras) v = v.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '');
+                    setForm({ ...form, [key]: v });
+                }}
+                placeholder={opts.placeholder}
+                maxLength={opts.maxLength}
+                required={opts.required}
+            />
+            <ErrMsg campo={key} errores={errores} />
+        </div>
+    );
 
     return (
-        <div style={styles.container}>
-            {/* HEADER */}
-            <div style={styles.topRow}>
-                <div style={styles.pageTitle}>Gestión de Usuarios</div>
-                <div style={styles.topActions}>
-                    <input
-                        style={styles.searchInput}
-                        placeholder="Buscar por nombre o correo..."
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                    />
-                    <button style={styles.btnPrimary} onClick={handleCrear}>+ Nuevo usuario</button>
+        <div className="p-5 text-white select-none">
+
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2.5">
+                <div className="text-[15px] font-medium text-white">Gestión de Usuarios</div>
+                <div className="flex gap-2.5 items-center">
+                    <div className="flex items-center gap-2 bg-navy-mid border border-white/8 rounded-lg px-3 py-1.5">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#8899aa" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                        <input className="bg-transparent border-none outline-none text-white text-xs w-[200px] placeholder:text-muted" placeholder="Buscar por nombre o correo..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+                    </div>
+                    <button
+                        onClick={() => {
+                            setFormCrear({ nombres: '', apellidos: '', rut: '', telefono: '+569', email: '', password: '', confirmPassword: '', roles: ['ROLE_USER'] });
+                            setErroresCrear({});
+                            setModalCrear(true);
+                        }}
+                        className="bg-green text-navy font-semibold text-xs px-3.5 py-2 rounded-lg hover:bg-green-dim transition-colors cursor-pointer"
+                    >
+                        + Nuevo usuario
+                    </button>
                 </div>
             </div>
 
-            {error && <div style={styles.alertError}>{error}</div>}
-            {success && <div style={styles.alertSuccess}>{success}</div>}
+            {error && <div className="bg-observed/10 border border-observed/25 rounded-lg px-3 py-2.5 text-observed text-xs mb-3">{error}</div>}
+            {success && <div className="bg-green/10 border border-green/25 rounded-lg px-3 py-2.5 text-green text-xs mb-3">{success}</div>}
 
-            {/* TABLA */}
-            <div style={styles.tableWrap}>
-                <table style={styles.table}>
+            <div className="bg-navy border border-white/8 rounded-xl overflow-visible">
+                <table className="w-full border-collapse">
                     <thead>
-                        <tr>
-                            {['Nombre', 'Correo', 'RUT', 'Rol', 'Estado', 'Creado', 'Acciones'].map(h => (
-                                <th key={h} style={styles.th}>{h}</th>
-                            ))}
-                        </tr>
+                        <tr>{['Nombre', 'Correo', 'RUT', 'Rol', 'Estado', 'Creado', 'Acciones'].map(h => (
+                            <th key={h} className="px-4 py-2.5 text-[10px] font-semibold text-muted text-left uppercase tracking-wide border-b border-white/8 font-mono">{h}</th>
+                        ))}</tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={7} style={styles.tdCenter}>Cargando...</td></tr>
+                            <tr><td colSpan={7} className="px-4 py-5 text-center text-muted text-xs">Cargando...</td></tr>
                         ) : usuariosFiltrados.length === 0 ? (
-                            <tr><td colSpan={7} style={styles.tdCenter}>No se encontraron usuarios</td></tr>
+                            <tr><td colSpan={7} className="px-4 py-5 text-center text-muted text-xs">No se encontraron usuarios</td></tr>
                         ) : usuariosFiltrados.map((u) => {
-                            const rol = getRolLabel(u);
+                            const rolInfo = getRolInfo(u);
                             return (
-                                <tr key={u.id} style={styles.tr}>
-                                    <td style={styles.td}>
-                                        <div style={styles.userCell}>
-                                            <div style={styles.avatar}>{(u.nombreCompleto || u.email).substring(0, 2).toUpperCase()}</div>
-                                            <span style={styles.userName}>{u.nombreCompleto || '—'}</span>
+                                <tr key={u.id} className="border-b border-white/4 hover:bg-white/3 transition-colors">
+                                    <td className="px-4 py-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-[26px] h-[26px] rounded-full bg-navy-mid border-[1.5px] border-green flex items-center justify-center text-[10px] font-semibold text-green shrink-0">
+                                                {(u.nombreCompleto || u.email).substring(0, 2).toUpperCase()}
+                                            </div>
+                                            <span className="text-[13px] font-medium text-white">{u.nombreCompleto || '—'}</span>
                                         </div>
                                     </td>
-                                    <td style={{ ...styles.td, ...styles.mono }}>{u.email}</td>
-                                    <td style={{ ...styles.td, ...styles.mono }}>{u.rut || '—'}</td>
-                                    <td style={styles.td}>
-                                        <span style={{ ...styles.badge, background: rol.bg, color: rol.color }}>{rol.label}</span>
-                                    </td>
-                                    <td style={styles.td}>
-                                        <span style={{
-                                            ...styles.badge,
-                                            background: u.isActive ? 'rgba(46,204,113,0.12)' : 'rgba(127,140,141,0.15)',
-                                            color: u.isActive ? '#2ecc71' : '#7f8c8d',
-                                        }}>
-                                            {u.isActive ? 'Activo' : 'Inactivo'}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...styles.td, ...styles.mono, fontSize: '11px' }}>
-                                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '—'}
-                                    </td>
-                                    <td style={styles.td}>
-                                        <div style={styles.actionsRow}>
-                                            <button style={styles.btnGhost} onClick={() => handleEditar(u)}>Editar</button>
-                                            <button
-                                                style={{ ...styles.btnGhost, color: u.isActive ? '#e74c3c' : '#2ecc71' }}
-                                                onClick={() => handleToggle(u.id)}
-                                            >
-                                                {u.isActive ? 'Desactivar' : 'Activar'}
-                                            </button>
-                                        </div>
-                                    </td>
+                                    <td className="px-4 py-2.5 font-mono text-[11px] text-muted">{u.email}</td>
+                                    <td className="px-4 py-2.5 font-mono text-[11px] text-muted">{u.rut || '—'}</td>
+                                    <td className="px-4 py-2.5"><span className={`text-[10px] font-semibold font-mono px-2.5 py-1 rounded-full ${rolInfo.class}`}>{rolInfo.label}</span></td>
+                                    <td className="px-4 py-2.5"><span className={`text-[10px] font-semibold font-mono px-2.5 py-1 rounded-full ${u.isActive ? 'bg-green/12 text-green' : 'bg-white/8 text-muted'}`}>{u.isActive ? 'Activo' : 'Inactivo'}</span></td>
+                                    <td className="px-4 py-2.5 font-mono text-[11px] text-muted">{u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-CL') : '—'}</td>
+                                    <td className="px-4 py-2.5"><ActionMenu usuario={u} onEditDatos={abrirEditDatos} onEditRol={abrirEditRol} onToggle={abrirConfirmToggle} /></td>
                                 </tr>
                             );
                         })}
@@ -170,105 +329,94 @@ const GestionUsuarios = () => {
                 </table>
             </div>
 
-            {/* MODAL */}
-            {showModal && (
-                <div style={styles.overlay} onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-                    <div style={styles.modal}>
-                        <div style={styles.modalHeader}>
-                            <span style={styles.modalTitle}>{modalMode === 'crear' ? 'Crear usuario' : 'Editar usuario'}</span>
-                            <button style={styles.modalClose} onClick={() => setShowModal(false)}>×</button>
+            {/* ════ MODAL: CREAR ════ */}
+            {modalCrear && (
+                <Overlay onClose={() => setModalCrear(false)}>
+                    <ModalHeader title="Crear nuevo usuario" onClose={() => setModalCrear(false)} />
+                    <form onSubmit={handleCrear}>
+                        <SectionTitle>Información personal</SectionTitle>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            {campo(formCrear, setFormCrear, erroresCrear, 'nombres', 'Nombres', { required: true, soloLetras: true, placeholder: 'Ej: Alan' })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'apellidos', 'Apellidos', { required: true, soloLetras: true, placeholder: 'Ej: Brito' })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'rut', 'RUT', { required: true, formatear: 'rut', placeholder: '12345678-9', maxLength: 10 })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'telefono', 'Teléfono', { required: true, formatear: 'telefono', placeholder: '+56912345678', maxLength: 12 })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'email', 'Correo', { required: true, type: 'email', placeholder: 'usuario@empresa.cl', full: true })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'password', 'Contraseña', { required: true, type: 'password', placeholder: 'Mín. 8 caracteres' })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'confirmPassword', 'Confirmar contraseña', { required: true, type: 'password', placeholder: 'Repite la contraseña' })}
                         </div>
+                        <SectionTitle>Rol</SectionTitle>
+                        <div className="grid grid-cols-3 gap-2.5 mb-5">
+                            {ROLES.map(r => <RoleCard key={r.key} rol={r} selected={formCrear.roles[0] === r.key} onClick={() => setFormCrear({ ...formCrear, roles: [r.key] })} />)}
+                        </div>
+                        <ModalFooter onCancel={() => setModalCrear(false)} label="Crear usuario" loading={submitting} />
+                    </form>
+                </Overlay>
+            )}
 
-                        <form onSubmit={handleSubmit}>
-                            {modalMode === 'crear' && (
-                                <>
-                                    <div style={styles.formGrid}>
-                                        <div style={styles.formGroup}>
-                                            <label style={styles.label}>Nombre completo <span style={styles.req}>*</span></label>
-                                            <input style={styles.input} value={form.nombreCompleto}
-                                                onChange={(e) => setForm({ ...form, nombreCompleto: e.target.value })} required />
-                                        </div>
-                                        <div style={styles.formGroup}>
-                                            <label style={styles.label}>RUT</label>
-                                            <input style={styles.input} value={form.rut} placeholder="18.165.530-5"
-                                                onChange={(e) => setForm({ ...form, rut: e.target.value })} />
-                                        </div>
-                                        <div style={styles.formGroup}>
-                                            <label style={styles.label}>Correo <span style={styles.req}>*</span></label>
-                                            <input style={styles.input} type="email" value={form.email}
-                                                onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-                                        </div>
-                                        <div style={styles.formGroup}>
-                                            <label style={styles.label}>Teléfono</label>
-                                            <input style={styles.input} value={form.telefono}
-                                                onChange={(e) => setForm({ ...form, telefono: e.target.value })} />
-                                        </div>
-                                        <div style={styles.formGroup}>
-                                            <label style={styles.label}>Contraseña <span style={styles.req}>*</span></label>
-                                            <input style={styles.input} type="password" value={form.password}
-                                                onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+            {/* ════ MODAL: EDITAR DATOS ════ */}
+            {modalEditDatos && usuarioTarget && (
+                <Overlay onClose={() => setModalEditDatos(false)}>
+                    <ModalHeader title={`Editar datos — ${usuarioTarget.nombreCompleto || usuarioTarget.email}`} onClose={() => setModalEditDatos(false)} />
+                    <form onSubmit={handleGuardarDatos}>
+                        <SectionTitle>Información personal</SectionTitle>
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            {campo(formDatos, setFormDatos, erroresEditar, 'nombres', 'Nombres', { soloLetras: true, placeholder: 'Ej: Alan' })}
+                            {campo(formDatos, setFormDatos, erroresEditar, 'apellidos', 'Apellidos', { soloLetras: true, placeholder: 'Ej: Brito' })}
+                            {campo(formDatos, setFormDatos, erroresEditar, 'rut', 'RUT', { formatear: 'rut', placeholder: '12345678-9', maxLength: 10 })}
+                            {campo(formDatos, setFormDatos, erroresEditar, 'telefono', 'Teléfono', { required: true, formatear: 'telefono', placeholder: '+56912345678', maxLength: 12 })}
+                            {campo(formDatos, setFormDatos, erroresEditar, 'email', 'Correo', { required: true, type: 'email', placeholder: 'usuario@empresa.cl', full: true })}
+                        </div>
+                        <SectionTitle>Cambiar contraseña <span className="normal-case tracking-normal font-normal text-muted">· dejar vacío para no cambiar</span></SectionTitle>
+                        <div className="mb-5">
+                            {campo(formDatos, setFormDatos, erroresEditar, 'password', '', { type: 'password', placeholder: 'Nueva contraseña (mín. 8 caracteres)' })}
+                        </div>
+                        <ModalFooter onCancel={() => setModalEditDatos(false)} label="Guardar cambios" loading={submitting} />
+                    </form>
+                </Overlay>
+            )}
 
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Rol</label>
-                                <select style={styles.input} value={form.roles[0]}
-                                    onChange={(e) => setForm({ ...form, roles: [e.target.value] })}>
-                                    <option value="ROLE_USER">Operador</option>
-                                    <option value="ROLE_AUDITOR">Supervisor</option>
-                                    <option value="ROLE_ADMIN">Administrador</option>
-                                </select>
-                            </div>
-
-                            <div style={styles.modalFooter}>
-                                <button type="button" style={styles.btnGhost} onClick={() => setShowModal(false)}>Cancelar</button>
-                                <button type="submit" style={styles.btnPrimary}>
-                                    {modalMode === 'crear' ? 'Crear usuario' : 'Guardar cambios'}
-                                </button>
-                            </div>
-                        </form>
+            {/* ════ MODAL: CAMBIAR ROL ════ */}
+            {modalEditRol && usuarioTarget && (
+                <Overlay onClose={() => setModalEditRol(false)}>
+                    <ModalHeader title={`Cambiar rol — ${usuarioTarget.nombreCompleto || usuarioTarget.email}`} onClose={() => setModalEditRol(false)} />
+                    <SectionTitle>Seleccionar rol</SectionTitle>
+                    <div className="grid grid-cols-3 gap-2.5 mb-5">
+                        {ROLES.map(r => <RoleCard key={r.key} rol={r} selected={rolSeleccionado === r.key} onClick={() => setRolSeleccionado(r.key)} />)}
                     </div>
-                </div>
+                    <div className="flex justify-end gap-2.5 pt-3.5 border-t border-white/8">
+                        <button type="button" onClick={() => setModalEditRol(false)} className="bg-transparent text-muted border border-white/8 rounded-lg px-3.5 py-2 text-xs hover:bg-white/5 cursor-pointer transition-colors">Cancelar</button>
+                        <button type="button" onClick={handleGuardarRol} disabled={submitting} className="bg-green text-navy font-semibold text-xs px-4 py-2 rounded-lg hover:bg-green-dim cursor-pointer transition-colors disabled:opacity-60">
+                            {submitting ? 'Guardando...' : 'Guardar rol'}
+                        </button>
+                    </div>
+                </Overlay>
+            )}
+
+            {/* ════ MODAL: CONFIRMAR TOGGLE ════ */}
+            {modalConfirmToggle && usuarioTarget && (
+                <Overlay onClose={() => setModalConfirmToggle(false)}>
+                    <div className="text-center py-2">
+                        <div className={`w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-xl ${usuarioTarget.isActive ? 'bg-observed/15' : 'bg-green/12'}`}>
+                            {usuarioTarget.isActive ? '⊗' : '✓'}
+                        </div>
+                        <div className="text-[15px] font-medium text-white mb-2">{usuarioTarget.isActive ? 'Desactivar usuario' : 'Activar usuario'}</div>
+                        <p className="text-xs text-muted mb-6 leading-relaxed">
+                            {usuarioTarget.isActive
+                                ? `¿Confirmas que deseas desactivar a ${usuarioTarget.nombreCompleto || usuarioTarget.email}? El usuario no podrá iniciar sesión.`
+                                : `¿Confirmas que deseas activar a ${usuarioTarget.nombreCompleto || usuarioTarget.email}? El usuario podrá iniciar sesión nuevamente.`}
+                        </p>
+                        <div className="flex justify-center gap-2.5">
+                            <button onClick={() => setModalConfirmToggle(false)} className="bg-transparent text-muted border border-white/8 rounded-lg px-4 py-2 text-xs hover:bg-white/5 cursor-pointer transition-colors">Cancelar</button>
+                            <button onClick={handleConfirmToggle} disabled={submitting}
+                                className={`font-semibold text-xs px-5 py-2 rounded-lg cursor-pointer transition-colors disabled:opacity-60 ${usuarioTarget.isActive ? 'bg-observed/15 text-observed border border-observed/25 hover:bg-observed/25' : 'bg-green text-navy hover:bg-green-dim'}`}>
+                                {submitting ? 'Procesando...' : usuarioTarget.isActive ? 'Sí, desactivar' : 'Sí, activar'}
+                            </button>
+                        </div>
+                    </div>
+                </Overlay>
             )}
         </div>
     );
-};
-
-const styles = {
-    container: { padding: '20px 24px', color: '#f0f4f8', minHeight: '100%' },
-    topRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' },
-    pageTitle: { fontSize: '15px', fontWeight: '500', color: '#f0f4f8' },
-    topActions: { display: 'flex', gap: '10px', alignItems: 'center' },
-    searchInput: { background: '#2d3d54', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', padding: '7px 12px', color: '#f0f4f8', fontSize: '12px', outline: 'none', width: '220px' },
-    btnPrimary: { background: '#2ecc71', color: '#1a2332', border: 'none', borderRadius: '7px', padding: '7px 14px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' },
-    btnGhost: { background: 'transparent', color: '#8899aa', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '5px 10px', fontSize: '11px', cursor: 'pointer' },
-    alertError: { background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.25)', borderRadius: '8px', padding: '10px 14px', color: '#e74c3c', fontSize: '12px', marginBottom: '14px' },
-    alertSuccess: { background: 'rgba(46,204,113,0.1)', border: '1px solid rgba(46,204,113,0.25)', borderRadius: '8px', padding: '10px 14px', color: '#2ecc71', fontSize: '12px', marginBottom: '14px' },
-    tableWrap: { background: '#1a2332', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', overflow: 'hidden' },
-    table: { width: '100%', borderCollapse: 'collapse' },
-    th: { padding: '9px 16px', fontSize: '10px', fontWeight: '600', color: '#8899aa', textAlign: 'left', letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'monospace', borderBottom: '1px solid rgba(255,255,255,0.08)' },
-    tr: { borderBottom: '1px solid rgba(255,255,255,0.04)' },
-    td: { padding: '10px 16px', fontSize: '12px', color: '#d0d8e4' },
-    tdCenter: { padding: '20px', textAlign: 'center', color: '#8899aa', fontSize: '12px' },
-    mono: { fontFamily: 'monospace', fontSize: '11px', color: '#8899aa' },
-    userCell: { display: 'flex', alignItems: 'center', gap: '8px' },
-    avatar: { width: '26px', height: '26px', borderRadius: '50%', background: '#2d3d54', border: '1.5px solid #2ecc71', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '600', color: '#2ecc71', flexShrink: 0 },
-    userName: { fontSize: '13px', fontWeight: '500', color: '#f0f4f8' },
-    badge: { display: 'inline-flex', alignItems: 'center', padding: '3px 9px', borderRadius: '20px', fontSize: '10px', fontWeight: '600', fontFamily: 'monospace' },
-    actionsRow: { display: 'flex', gap: '6px' },
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-    modal: { background: '#1a2332', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '28px', width: '520px', maxHeight: '80vh', overflowY: 'auto' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    modalTitle: { fontSize: '15px', fontWeight: '500', color: '#f0f4f8' },
-    modalClose: { background: 'transparent', border: 'none', color: '#8899aa', fontSize: '20px', cursor: 'pointer' },
-    modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', paddingTop: '14px', borderTop: '1px solid rgba(255,255,255,0.08)' },
-    formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' },
-    formGroup: { marginBottom: '12px' },
-    label: { display: 'block', fontSize: '11px', fontWeight: '500', color: '#8899aa', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' },
-    req: { color: '#e74c3c' },
-    input: { width: '100%', background: '#0f1922', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '9px 13px', color: '#f0f4f8', fontSize: '13px', outline: 'none', boxSizing: 'border-box' },
 };
 
 export default GestionUsuarios;

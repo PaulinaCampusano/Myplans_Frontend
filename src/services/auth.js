@@ -33,3 +33,17 @@ export const logout = () => {
     localStorage.removeItem('nombreCompleto');
     localStorage.removeItem('permisos');
 };
+export const getMe = async () => {
+    const response = await api.get('/api/auth/me');
+    return response.data;
+};
+
+export const updateMe = async (datos) => {
+    const response = await api.put('/api/auth/me', datos);
+    return response.data;
+};
+
+export const changeMyPassword = async (currentPassword, newPassword) => {
+    const response = await api.put('/api/auth/me/password', { currentPassword, newPassword });
+    return response.data;
+};

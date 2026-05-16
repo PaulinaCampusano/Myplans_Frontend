@@ -5,6 +5,7 @@ import Profile from './pages/Profile/Profile';
 import Layout from './components/Layout';
 import GestionUsuarios from './pages/GestionUsuarios/GestionUsuarios';
 import ProtectedRoute from './components/ProtectedRoute';
+import ResetPassword from './pages/ResetPassword/ResetPassword';
 
 const profileSidebar = [
   { path: '/perfil', label: 'Mi Perfil', icon: '👤' },
@@ -24,6 +25,8 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Layout sidebarItems={dashboardSidebar}>
