@@ -91,10 +91,10 @@ const Profile = () => {
     const handleCambiarPassword = async (e) => {
         e.preventDefault();
 
-        const ePassword = validarPassword(newPassword, true);
-        if (ePassword) { flash('err', ePassword, 'password'); return; }
-        if (newPassword !== confirmPassword) { flash('err', 'Las contraseñas no coinciden', 'password'); return; }
         if (!currentPassword) { flash('err', 'Ingresa tu contraseña actual', 'password'); return; }
+        if (!newPassword || newPassword.trim() === '') { flash('err', 'Ingresa la nueva contraseña', 'password'); return; }
+        if (newPassword.length < 8) { flash('err', 'La nueva contraseña debe tener mínimo 8 caracteres', 'password'); return; }
+        if (newPassword !== confirmPassword) { flash('err', 'Las contraseñas no coinciden', 'password'); return; }
 
         setLoadingPassword(true);
         try {

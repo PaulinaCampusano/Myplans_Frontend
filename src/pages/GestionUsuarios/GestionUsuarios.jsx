@@ -99,6 +99,7 @@ const GestionUsuarios = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [busqueda, setBusqueda] = useState('');
+    const [modalConfirmAdmin, setModalConfirmAdmin] = useState(false);
 
     const [modalCrear, setModalCrear] = useState(false);
     const [modalEditDatos, setModalEditDatos] = useState(false);
@@ -221,13 +222,22 @@ const GestionUsuarios = () => {
     };
 
     const handleGuardarRol = async () => {
+        if (rolSeleccionado === 'ROLE_ADMIN') {
+            setModalEditRol(false);
+            setModalConfirmAdmin(true);
+            return;
+        }
+        await ejecutarCambioRol();
+    };
+
+    const ejecutarCambioRol = async () => {
         setSubmitting(true);
         try {
             await asignarRol(usuarioTarget.id, rolSeleccionado);
+            setModalConfirmAdmin(false);
             setModalEditRol(false);
             flash('ok', 'Rol actualizado correctamente');
 
-            // Si el admin se cambió su propio rol, actualizar contexto y redirigir
             const emailLogueado = localStorage.getItem('email');
             if (usuarioTarget.email === emailLogueado && rolSeleccionado !== 'ROLE_ADMIN') {
                 actualizarRol(rolSeleccionado);
@@ -239,10 +249,15 @@ const GestionUsuarios = () => {
         finally { setSubmitting(false); }
     };
 
-    const usuariosFiltrados = usuarios.filter((u) =>
-        u.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
-        u.nombreCompleto?.toLowerCase().includes(busqueda.toLowerCase())
-    );
+    const emailLogueado = localStorage.getItem('email');
+
+    const usuariosFiltrados = usuarios
+        .filter((u) => u.role?.nombre !== 'ROLE_ADMIN')
+        .filter((u) => u.email !== emailLogueado)
+        .filter((u) =>
+            u.email?.toLowerCase().includes(busqueda.toLowerCase()) ||
+            u.nombreCompleto?.toLowerCase().includes(busqueda.toLowerCase())
+        );
 
     const campo = (form, setForm, errores, key, label, opts = {}) => (
         <div className={opts.full ? 'col-span-2' : ''}>
@@ -410,6 +425,34 @@ const GestionUsuarios = () => {
                             <button onClick={handleConfirmToggle} disabled={submitting}
                                 className={`font-semibold text-xs px-5 py-2 rounded-lg cursor-pointer transition-colors disabled:opacity-60 ${usuarioTarget.isActive ? 'bg-observed/15 text-observed border border-observed/25 hover:bg-observed/25' : 'bg-green text-navy hover:bg-green-dim'}`}>
                                 {submitting ? 'Procesando...' : usuarioTarget.isActive ? 'Sí, desactivar' : 'Sí, activar'}
+                            </button>
+                        </div>
+                    </div>
+                </Overlay>
+            )}
+            {modalConfirmAdmin && usuarioTarget && (
+                <Overlay onClose={() => setModalConfirmAdmin(false)}>
+                    <div className="text-center py-2">
+                        <div className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-xl bg-observed/15">
+                            ⚠
+                        </div>
+                        <div className="text-[15px] font-medium text-white mb-2">
+                            Asignar rol Administrador
+                        </div>
+                        <p className="text-xs text-muted mb-6 leading-relaxed">
+                            Estás a punto de asignar el rol de <span className="text-white font-medium">Administrador</span> a <span className="text-white font-medium">{usuarioTarget.nombreCompleto || usuarioTarget.email}</span>.
+                            <br /><br />
+                            Una vez asignado, <span className="text-observed">no podrás cambiar su rol ni desactivar esta cuenta</span> desde el panel de administración.
+                            <br /><br />
+                            ¿Confirmas el cambio?
+                        </p>
+                        <div className="flex justify-center gap-2.5">
+                            <button onClick={() => setModalConfirmAdmin(false)} className="bg-transparent text-muted border border-white/8 rounded-lg px-4 py-2 text-xs hover:bg-white/5 cursor-pointer transition-colors">
+                                Cancelar
+                            </button>
+                            <button onClick={ejecutarCambioRol} disabled={submitting}
+                                className="bg-observed/15 text-observed border border-observed/25 rounded-lg px-5 py-2 text-xs font-semibold hover:bg-observed/25 cursor-pointer transition-colors disabled:opacity-60">
+                                {submitting ? 'Procesando...' : 'Sí, asignar Administrador'}
                             </button>
                         </div>
                     </div>
