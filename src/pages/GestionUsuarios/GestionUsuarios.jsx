@@ -117,6 +117,7 @@ const GestionUsuarios = () => {
     const [erroresCrear, setErroresCrear] = useState({});
     const [erroresEditar, setErroresEditar] = useState({});
     const [rolSeleccionado, setRolSeleccionado] = useState('ROLE_USER');
+    const [errorModal, setErrorModal] = useState('');
 
     const flash = (type, msg) => {
         if (type === 'ok') { setSuccess(msg); setTimeout(() => setSuccess(''), 3500); }
@@ -186,8 +187,8 @@ const GestionUsuarios = () => {
             setModalCrear(false);
             flash('ok', 'Usuario creado correctamente');
             cargarUsuarios();
-        } catch {
-            flash('err', 'Error al crear usuario. El correo puede estar en uso.');
+        } catch (err) {
+            setErrorModal(err?.response?.data?.message || 'Error al crear usuario.');
         } finally { setSubmitting(false); }
     };
 
@@ -309,6 +310,7 @@ const GestionUsuarios = () => {
                         onClick={() => {
                             setFormCrear({ nombres: '', apellidos: '', rut: '', telefono: '+569', email: '', password: '', confirmPassword: '', roles: ['ROLE_USER'] });
                             setErroresCrear({});
+                            setErrorModal('');
                             setModalCrear(true);
                         }}
                         className="bg-green text-navy font-semibold text-xs px-3.5 py-2 rounded-lg hover:bg-green-dim transition-colors cursor-pointer"
@@ -360,8 +362,8 @@ const GestionUsuarios = () => {
 
             {/* ════ MODAL: CREAR ════ */}
             {modalCrear && (
-                <Overlay onClose={() => setModalCrear(false)}>
-                    <ModalHeader title="Crear nuevo usuario" onClose={() => setModalCrear(false)} />
+                <Overlay onClose={() => { setModalCrear(false); setErrorModal(''); }}>
+                    <ModalHeader title="Crear nuevo usuario" onClose={() => { setModalCrear(false); setErrorModal(''); }} />
                     <form onSubmit={handleCrear}>
                         <SectionTitle>Información personal</SectionTitle>
                         <div className="grid grid-cols-2 gap-3 mb-4">
@@ -378,7 +380,12 @@ const GestionUsuarios = () => {
                         <div className="grid grid-cols-3 gap-2.5 mb-5">
                             {ROLES.map(r => <RoleCard key={r.key} rol={r} selected={formCrear.roles[0] === r.key} onClick={() => setFormCrear({ ...formCrear, roles: [r.key] })} />)}
                         </div>
-                        <ModalFooter onCancel={() => setModalCrear(false)} label="Crear usuario" loading={submitting} />
+                        {errorModal && (
+                            <div className="bg-observed/10 border border-observed/25 rounded-lg px-3 py-2.5 text-observed text-xs mb-3">
+                                {errorModal}
+                            </div>
+                        )}
+                        <ModalFooter onCancel={() => { setModalCrear(false); setErrorModal(''); }} label="Crear usuario" loading={submitting} />
                     </form>
                 </Overlay>
             )}
