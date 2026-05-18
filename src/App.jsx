@@ -6,18 +6,10 @@ import Layout from './components/Layout';
 import GestionUsuarios from './pages/GestionUsuarios/GestionUsuarios';
 import ProtectedRoute from './components/ProtectedRoute';
 import ResetPassword from './pages/ResetPassword/ResetPassword';
-
-const profileSidebar = [
-  { path: '/perfil', label: 'Mi Perfil', icon: '👤' },
-];
-
-const dashboardSidebar = [
-  { path: '/dashboard', label: 'Dashboard', icon: '⊞' },
-];
-
-const gestionSidebar = [
-  { path: '/gestion-usuarios', label: 'Gestión Usuarios', icon: '👥' },
-];
+import Precarga from './pages/Precarga/Precarga';
+import Exportacion from './pages/Exportacion/Exportacion';
+import Auditoria from './pages/Auditoria/Auditoria';
+import Precomisionamiento from './pages/Precomisionamiento/Precomisionamiento';
 
 const App = () => {
   return (
@@ -29,27 +21,46 @@ const App = () => {
 
         <Route path="/dashboard" element={
           <ProtectedRoute>
-            <Layout sidebarItems={dashboardSidebar}>
-              <Dashboard />
-            </Layout>
+            <Layout><Dashboard /></Layout>
           </ProtectedRoute>
         } />
 
         <Route path="/gestion-usuarios" element={
           <ProtectedRoute rolesPermitidos={['ROLE_ADMIN']}>
-            <Layout sidebarItems={gestionSidebar}>
-              <GestionUsuarios />
-            </Layout>
+            <Layout><GestionUsuarios /></Layout>
           </ProtectedRoute>
         } />
 
         <Route path="/perfil" element={
           <ProtectedRoute>
-            <Layout sidebarItems={profileSidebar}>
-              <Profile />
-            </Layout>
+            <Layout><Profile /></Layout>
           </ProtectedRoute>
         } />
+
+        <Route path="/precarga" element={
+          <ProtectedRoute rolesPermitidos={['ROLE_ADMIN']}>
+            <Layout><Precarga /></Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/exportacion" element={
+          <ProtectedRoute rolesPermitidos={['ROLE_AUDITOR']}>
+            <Layout><Exportacion /></Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/auditoria" element={
+          <ProtectedRoute rolesPermitidos={['ROLE_AUDITOR']}>
+            <Layout><Auditoria /></Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/precomisionamiento" element={
+          <ProtectedRoute rolesPermitidos={['ROLE_USER', 'ROLE_AUDITOR']}>
+            <Layout><Precomisionamiento /></Layout>
+          </ProtectedRoute>
+        } />
+
       </Routes>
     </BrowserRouter>
   );

@@ -154,6 +154,20 @@ const GestionUsuarios = () => {
 
     const abrirConfirmToggle = (u) => { setUsuarioTarget(u); setModalConfirmToggle(true); };
 
+    const handleConfirmToggle = async () => {
+        setSubmitting(true);
+        try {
+            await toggleEstado(usuarioTarget.id);
+            setModalConfirmToggle(false);
+            flash('ok', `Usuario ${usuarioTarget.isActive ? 'desactivado' : 'activado'} correctamente`);
+            cargarUsuarios();
+        } catch (err) {
+            flash('err', err?.response?.data?.message || 'Error al cambiar estado del usuario');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const handleCrear = async (e) => {
         e.preventDefault();
         const errs = validarFormUsuario(formCrear, 'crear');
@@ -356,7 +370,8 @@ const GestionUsuarios = () => {
                             {campo(formCrear, setFormCrear, erroresCrear, 'rut', 'RUT', { required: true, formatear: 'rut', placeholder: '12345678-9', maxLength: 10 })}
                             {campo(formCrear, setFormCrear, erroresCrear, 'telefono', 'Teléfono', { required: true, formatear: 'telefono', placeholder: '+56912345678', maxLength: 12 })}
                             {campo(formCrear, setFormCrear, erroresCrear, 'email', 'Correo', { required: true, type: 'email', placeholder: 'usuario@empresa.cl', full: true })}
-                            {campo(formCrear, setFormCrear, erroresCrear, 'password', 'Contraseña', { required: true, type: 'password', placeholder: 'Mín. 8 caracteres' })}
+                            {campo(formCrear, setFormCrear, erroresCrear, 'password', 'Contraseña', { required: true, type: 'password', placeholder: 'Ej: Admin1234' })}
+                            <span className="text-[10px] text-muted mt-1 block">Mínimo 8 caracteres, mayúscula, minúscula, número y carácter especial (!@#$%^&*).</span>
                             {campo(formCrear, setFormCrear, erroresCrear, 'confirmPassword', 'Confirmar contraseña', { required: true, type: 'password', placeholder: 'Repite la contraseña' })}
                         </div>
                         <SectionTitle>Rol</SectionTitle>
@@ -383,7 +398,8 @@ const GestionUsuarios = () => {
                         </div>
                         <SectionTitle>Cambiar contraseña <span className="normal-case tracking-normal font-normal text-muted">· dejar vacío para no cambiar</span></SectionTitle>
                         <div className="mb-5">
-                            {campo(formDatos, setFormDatos, erroresEditar, 'password', '', { type: 'password', placeholder: 'Nueva contraseña (mín. 8 caracteres)' })}
+                            {campo(formDatos, setFormDatos, erroresEditar, 'password', '', { type: 'password', placeholder: 'Ej: Admin1234*' })}
+                            <span className="text-[10px] text-muted mt-1 block">Mínimo 8 caracteres, mayúscula, minúscula, número y carácter especial (!@#$%^&*).</span>
                         </div>
                         <ModalFooter onCancel={() => setModalEditDatos(false)} label="Guardar cambios" loading={submitting} />
                     </form>

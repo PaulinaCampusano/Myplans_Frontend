@@ -57,6 +57,10 @@ export const validarPassword = (valor, obligatoria = true) => {
         return null;
     }
     if (valor.length < 8) return 'Mínimo 8 caracteres';
+    if (!/[a-z]/.test(valor)) return 'Debe contener al menos una letra minúscula';
+    if (!/[A-Z]/.test(valor)) return 'Debe contener al menos una letra mayúscula';
+    if (!/[0-9]/.test(valor)) return 'Debe contener al menos un número';
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(valor)) return 'Debe contener al menos un carácter especial (!@#$%^&* etc.)';
     return null;
 };
 

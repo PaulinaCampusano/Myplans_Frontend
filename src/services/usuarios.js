@@ -11,7 +11,7 @@ export const crearUsuario = async (data) => {
 };
 
 export const toggleEstado = async (id) => {
-    const response = await api.put(`/api/admin/users/${id}/toggle-status`);
+    const response = await api.patch(`/api/admin/users/${id}/toggle-status`);
     return response.data;
 };
 
