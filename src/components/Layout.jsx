@@ -7,6 +7,7 @@ const topbarPorRol = {
         { path: '/gestion-usuarios', label: 'Gestión Usuarios' },
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/precarga', label: 'Precarga de Planos' },
+        { path: '/analisis-ia', label: '✦ Análisis IA' },
         { path: '/perfil', label: 'Perfil' },
     ],
     ROLE_AUDITOR: [
@@ -14,11 +15,13 @@ const topbarPorRol = {
         { path: '/precomisionamiento', label: 'Precomisionamiento' },
         { path: '/exportacion', label: 'Exportación' },
         { path: '/auditoria', label: 'Auditoría' },
+        { path: '/analisis-ia', label: '✦ Análisis IA' },
         { path: '/perfil', label: 'Perfil' },
     ],
     ROLE_USER: [
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/precomisionamiento', label: 'Precomisionamiento' },
+        { path: '/analisis-ia', label: '✦ Análisis IA' },
         { path: '/perfil', label: 'Perfil' },
     ],
 };
@@ -52,6 +55,14 @@ const sidebarPorRuta = {
     '/auditoria': {
         categoria: 'REGISTRO',
         items: [{ path: '/auditoria', label: 'Auditoría', icon: '🔍' }],
+    },
+    '/auditoria': {
+        categoria: 'REGISTRO',
+        items: [{ path: '/auditoria', label: 'Auditoría', icon: '🔍' }],
+    },
+    '/analisis-ia': {
+        categoria: 'INTELIGENCIA ARTIFICIAL',
+        items: [{ path: '/analisis-ia', label: 'Análisis IA', icon: '✦' }],
     },
     '/perfil': {
         categoria: 'CUENTA',

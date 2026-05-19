@@ -28,8 +28,11 @@ export const validarPlano = (idPlano) =>
 export const cerrarPlano = (idPlano) =>
     api.put(`/api/v1/planos/${idPlano}/cerrar`);
 
-export const exportarPlano = (idPlano) =>
-    api.get(`/api/v1/planos/${idPlano}/export`, { responseType: 'blob' });
+export const exportarPlano = (idPlano, statusExport, observaciones = '') =>
+    api.get(`/api/v1/reportes/plano/${idPlano}/excel`, {
+        params: { statusExport, observaciones },
+        responseType: 'blob',
+    });
 
 // ─── TAGS ─────────────────────────────────────────────
 
