@@ -76,7 +76,7 @@ export default function Precomisionamiento() {
         if (plano.urlS3) {
             try {
                 const token = localStorage.getItem('token');
-                const res = await fetch(`http://localhost:8095/api/v1/planos/${plano.idPlano}/pdf`, {
+                const res = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8095'}/api/v1/planos/${plano.idPlano}/pdf`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const blob = await res.blob();
