@@ -25,15 +25,19 @@ export default function Auditoria() {
     const [busqueda, setBusqueda]   = useState('');
 
     useEffect(() => {
-        Promise.all([getAllHistorial(), getUserNombres()])
-            .then(([resH, resU]) => {
-                setHistorial(resH.data || []);
+        const fetchHistorial = getAllHistorial()
+            .then(res => setHistorial(res.data || []))
+            .catch(() => setError('No se pudo cargar el registro de auditoría.'));
+
+        const fetchNombres = getUserNombres()
+            .then(res => {
                 const map = {};
-                (resU.data || []).forEach(u => { map[u.id] = u.nombre; });
+                (res.data || []).forEach(u => { map[u.id] = u.nombre; });
                 setUserMap(map);
             })
-            .catch(() => setError('No se pudo cargar el registro de auditoría.'))
-            .finally(() => setLoading(false));
+            .catch(() => {});
+
+        Promise.all([fetchHistorial, fetchNombres]).finally(() => setLoading(false));
     }, []);
 
     const filtrados = useMemo(() => {
@@ -133,7 +137,7 @@ export default function Auditoria() {
                                             TAG #{r.idTag}
                                         </td>
                                         <td style={{ padding: '11px 16px', fontSize: 12, color: '#f0f4f8', whiteSpace: 'nowrap' }}>
-                                            {userMap[r.idUsuario] || `#${r.idUsuario}`}
+                                            {userMap[r.idUsuario] || <span style={{ color: '#8899aa', fontFamily: 'monospace' }}>Usuario #{r.idUsuario}</span>}
                                         </td>
                                         <td style={{ padding: '11px 16px' }}>
                                             {r.estadoAnterior ? <EstadoBadge estado={r.estadoAnterior} /> : <span style={{ color: '#8899aa', fontSize: 11 }}>—</span>}
