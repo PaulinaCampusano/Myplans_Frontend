@@ -42,8 +42,9 @@ const ResetPassword = () => {
             setSuccess(true);
         } catch (err) {
             const status = err.response?.status;
-            const msg = err.response?.data?.error || '';
-            if (status === 400 || status === 410 || msg.toLowerCase().includes('expirado') || msg.toLowerCase().includes('inválido')) {
+            const msg = err.response?.data?.error || err.response?.data?.message || '';
+            const isTokenError = msg.toLowerCase().includes('expirado') || msg.toLowerCase().includes('inválido') || msg.toLowerCase().includes('no encontrado');
+            if ((status === 400 || status === 410) && isTokenError) {
                 setError('El enlace ha expirado o ya fue utilizado. Solicita uno nuevo.');
             } else {
                 setError(msg || 'Error al cambiar la contraseña. Intenta nuevamente.');
@@ -100,6 +101,19 @@ const ResetPassword = () => {
                             <div className="mb-3">
                                 <label className={labelClass}>Nueva contraseña</label>
                                 <input className={inputClass} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Mín. 8 caracteres" required />
+                                <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5">
+                                    {[
+                                        { ok: newPassword.length >= 8,        label: '8 caracteres mínimo' },
+                                        { ok: /[A-Z]/.test(newPassword),       label: 'Una mayúscula' },
+                                        { ok: /[a-z]/.test(newPassword),       label: 'Una minúscula' },
+                                        { ok: /\d/.test(newPassword),          label: 'Un número' },
+                                        { ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword), label: 'Un carácter especial' },
+                                    ].map(({ ok, label }) => (
+                                        <div key={label} className={`text-[10px] flex items-center gap-1 ${ok ? 'text-green' : 'text-muted'}`}>
+                                            <span>{ok ? '✓' : '○'}</span>{label}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                             <div className="mb-4">
                                 <label className={labelClass}>Confirmar contraseña</label>
