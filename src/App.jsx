@@ -63,7 +63,7 @@ const App = () => {
         } />
 
         <Route path="/analisis-ia" element={
-          <ProtectedRoute rolesPermitidos={['ROLE_ADMIN', 'ROLE_AUDITOR']}>
+          <ProtectedRoute rolesPermitidos={['ROLE_ADMIN', 'ROLE_AUDITOR', 'ROLE_USER']}>
             <Layout><AnalisisIA /></Layout>
           </ProtectedRoute>
         } />

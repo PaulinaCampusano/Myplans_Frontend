@@ -25,15 +25,19 @@ export default function Auditoria() {
     const [busqueda, setBusqueda]   = useState('');
 
     useEffect(() => {
-        Promise.all([getAllHistorial(), getUserNombres()])
-            .then(([resH, resU]) => {
-                setHistorial(resH.data || []);
+        const fetchHistorial = getAllHistorial()
+            .then(res => setHistorial(res.data || []))
+            .catch(() => setError('No se pudo cargar el registro de auditoría.'));
+
+        const fetchNombres = getUserNombres()
+            .then(res => {
                 const map = {};
-                (resU.data || []).forEach(u => { map[u.id] = u.nombre; });
+                (res.data || []).forEach(u => { map[u.id] = u.nombre; });
                 setUserMap(map);
             })
-            .catch(() => setError('No se pudo cargar el registro de auditoría.'))
-            .finally(() => setLoading(false));
+            .catch(() => {});
+
+        Promise.all([fetchHistorial, fetchNombres]).finally(() => setLoading(false));
     }, []);
 
     const filtrados = useMemo(() => {
@@ -44,7 +48,8 @@ export default function Auditoria() {
             (userMap[r.idUsuario] || '').toLowerCase().includes(q) ||
             (r.estadoNuevo || '').toLowerCase().includes(q) ||
             (r.estadoAnterior || '').toLowerCase().includes(q) ||
-            (r.observaciones || '').toLowerCase().includes(q)
+            (r.observaciones || '').toLowerCase().includes(q) ||
+            (r.porIa ? 'ia agente inteligencia artificial' : 'manual').includes(q)
         );
     }, [historial, userMap, busqueda]);
 
@@ -69,6 +74,12 @@ export default function Auditoria() {
                         <div style={{ fontSize: 10, color: '#8899aa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>TAGs distintos</div>
                         <div style={{ fontSize: 20, fontWeight: 600, fontFamily: 'monospace', color: '#f0f4f8' }}>
                             {new Set(historial.map(r => r.idTag)).size}
+                        </div>
+                    </div>
+                    <div style={{ background: '#1a2332', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 10, padding: '14px 20px' }}>
+                        <div style={{ fontSize: 10, color: '#8899aa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Aplicados por IA</div>
+                        <div style={{ fontSize: 20, fontWeight: 600, fontFamily: 'monospace', color: '#a78bfa' }}>
+                            {historial.filter(r => r.porIa).length}
                         </div>
                     </div>
                     {busqueda && (
@@ -116,7 +127,7 @@ export default function Auditoria() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr>
-                                    {['Fecha', 'TAG', 'Usuario', 'Estado anterior', 'Estado nuevo', 'Observaciones'].map(h => (
+                                    {['Fecha', 'TAG', 'Usuario', 'Origen', 'Estado anterior', 'Estado nuevo', 'Observaciones'].map(h => (
                                         <th key={h} style={{ padding: '10px 16px', fontSize: 10, fontWeight: 600, color: '#8899aa', textAlign: 'left', letterSpacing: '0.06em', textTransform: 'uppercase', borderBottom: '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }}>
                                             {h}
                                         </th>
@@ -133,7 +144,13 @@ export default function Auditoria() {
                                             TAG #{r.idTag}
                                         </td>
                                         <td style={{ padding: '11px 16px', fontSize: 12, color: '#f0f4f8', whiteSpace: 'nowrap' }}>
-                                            {userMap[r.idUsuario] || `#${r.idUsuario}`}
+                                            {userMap[r.idUsuario] || <span style={{ color: '#8899aa', fontFamily: 'monospace' }}>Usuario #{r.idUsuario}</span>}
+                                        </td>
+                                        <td style={{ padding: '11px 16px' }}>
+                                            {r.porIa
+                                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)', whiteSpace: 'nowrap' }}>✦ IA</span>
+                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: 'rgba(255,255,255,0.06)', color: '#8899aa', border: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap' }}>Manual</span>
+                                            }
                                         </td>
                                         <td style={{ padding: '11px 16px' }}>
                                             {r.estadoAnterior ? <EstadoBadge estado={r.estadoAnterior} /> : <span style={{ color: '#8899aa', fontSize: 11 }}>—</span>}

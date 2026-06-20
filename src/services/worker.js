@@ -1,6 +1,6 @@
 import api from './api';
 
-const WORKER_BASE = 'http://localhost:8095';
+const WORKER_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8095';
 
 export const analizarPlano = async (idPlano, pdfFile) => {
     const token = localStorage.getItem('token');
